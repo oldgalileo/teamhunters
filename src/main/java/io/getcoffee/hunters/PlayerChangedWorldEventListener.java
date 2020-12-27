@@ -19,11 +19,9 @@ public class PlayerChangedWorldEventListener implements Listener {
 
     @EventHandler
     public void onPlayerChangedWorldEvent(PlayerChangedWorldEvent e) {
-        if(this.instance.playerTeamMap.containsKey(e.getPlayer().getName())) {
-            Bukkit.getScheduler().runTaskLater(this.instance, () -> {
-                this.instance.playerTargetMap.put(e.getPlayer().getName(), e.getPlayer().getLocation());
-            }, 6);
-        }
+        Bukkit.getScheduler().runTaskLater(this.instance, () -> {
+            this.instance.playerTargetMap.put(e.getPlayer().getName(), e.getPlayer().getLocation());
+        }, 11);
     }
 
 }
