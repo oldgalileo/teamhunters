@@ -10,19 +10,17 @@ import java.util.Arrays;
 
 public class PlayerChangedWorldEventListener implements Listener {
 
+    private final Hunters instance;
+
+    public PlayerChangedWorldEventListener(Hunters instance) {
+        this.instance = instance;
+    }
+
     @EventHandler
     public void onPlayerChangedWorldEvent(PlayerChangedWorldEvent e) {
-        Arrays.stream(e.getPlayer().getInventory().getContents())
-                .filter(item -> item != null && item.getType() == Material.COMPASS)
-                .forEach(item -> {
-                    var compassMeta = (CompassMeta) item.getItemMeta();
-                    if(!compassMeta.hasLodestone()) {
-                        return;
-                    }
-                    compassMeta.setLodestoneTracked(false);
-                    compassMeta.setLodestone(e.getPlayer().getLocation());
-                    item.setItemMeta(compassMeta);
-                });
+        if(this.instance.playerTeamMap.containsKey(e.getPlayer().getName())) {
+            this.instance.playerTargetMap.put(e.getPlayer().getName(), e.getPlayer().getLocation());
+        }
     }
 
 }

@@ -18,10 +18,12 @@ public class Hunters extends JavaPlugin {
     public static Hunters INSTANCE;
     private boolean running = false;
 
+    public HashMap<String, Location> playerTargetMap = new HashMap<>();
     public HashMap<String, Integer> playerTeamMap = new HashMap<>();
     public String[] teamName = new String[2];
     public List<String>[] teamTargetMap = new ArrayList[2];
-    private HashMap<String, BukkitTask> compassTasks = new HashMap<>();
+    private HashMap<String, BukkitTask> trackPlayerTasks = new HashMap<>();
+    private HashMap<String, BukkitTask> updateCompassTasks = new HashMap<>();
 
     public HashMap<String, Location> pauseLocation = new HashMap<>();
 
@@ -34,7 +36,7 @@ public class Hunters extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new AsyncPlayerChatEventListener(INSTANCE), this);
         getServer().getPluginManager().registerEvents(new PlayerRespawnListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerJoinListener(INSTANCE), this);
-        getServer().getPluginManager().registerEvents(new PlayerChangedWorldEventListener(), this);
+        getServer().getPluginManager().registerEvents(new PlayerChangedWorldEventListener(INSTANCE), this);
         getServer().setDefaultGameMode(GameMode.SPECTATOR);
         if (this.isRunning()) {
             this.start();
@@ -110,22 +112,24 @@ public class Hunters extends JavaPlugin {
         }
         p.setGameMode(GameMode.SURVIVAL);
         p.setPlayerListName("[" + teamName[team] + "] " + p.getName());
-        addCompassTakeover(p);
+        addTrackPlayerTask(p);
+        addUpdateCompassTask(p);
         if(!p.getInventory().contains(Material.COMPASS))
             p.getInventory().addItem(new ItemStack(Material.COMPASS));
     }
 
-    public void pausePlayer(Player p) {
-        if (playerTeamMap.containsKey(p.getName()))
-            pauseLocation.put(p.getName(), p.getLocation());
-        p.setGameMode(GameMode.SPECTATOR);
-        p.setPlayerListName(p.getName());
-        cancelCompassTakeover(p);
+    // TODO: Refactor this to organize it better
+    public void addTrackPlayerTask(Player p) {
+        this.trackPlayerTasks.put(p.getName(), Bukkit.getScheduler().runTaskTimer(Hunters.INSTANCE, () -> {
+            Optional.ofNullable(Hunters.INSTANCE.getNearest(p)).ifPresent(loc -> {
+                Hunters.INSTANCE.playerTargetMap.put(p.getName(), loc);
+            });
+        }, 5, 5));
     }
 
-    public void addCompassTakeover(Player p) {
-        this.compassTasks.put(p.getName(), Bukkit.getScheduler().runTaskTimer(Hunters.INSTANCE, () -> {
-            Optional.ofNullable(Hunters.INSTANCE.getNearest(p)).ifPresent(loc -> {
+    public void addUpdateCompassTask(Player p) {
+        this.updateCompassTasks.put(p.getName(), Bukkit.getScheduler().runTaskTimer(Hunters.INSTANCE, () -> {
+            Optional.ofNullable(Hunters.INSTANCE.playerTargetMap.get(p.getName())).ifPresent(loc -> {
                 Arrays.stream(p.getInventory().getContents())
                         .filter(item -> item != null && item.getType() == Material.COMPASS)
                         .forEach(item -> {
@@ -138,9 +142,23 @@ public class Hunters extends JavaPlugin {
         }, 10, 10));
     }
 
-    public void cancelCompassTakeover(Player p) {
-        Optional.ofNullable(this.compassTasks.get(p.getName())).ifPresent(BukkitTask::cancel);
-        this.compassTasks.remove(p.getName());
+    public void pausePlayer(Player p) {
+        if (playerTeamMap.containsKey(p.getName()))
+            pauseLocation.put(p.getName(), p.getLocation());
+        p.setGameMode(GameMode.SPECTATOR);
+        p.setPlayerListName(p.getName());
+        cancelTrackPlayerTask(p);
+        cancelUpdateCompassTask(p);
+    }
+
+    public void cancelUpdateCompassTask(Player p) {
+        Optional.ofNullable(this.updateCompassTasks.get(p.getName())).ifPresent(BukkitTask::cancel);
+        this.updateCompassTasks.remove(p.getName());
+    }
+
+    public void cancelTrackPlayerTask(Player p) {
+        Optional.ofNullable(this.trackPlayerTasks.get(p.getName())).ifPresent(BukkitTask::cancel);
+        this.trackPlayerTasks.remove(p.getName());
     }
 
     public Location getNearest(Player player) {
