@@ -1,5 +1,6 @@
 package io.getcoffee.hunters;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -19,7 +20,9 @@ public class PlayerChangedWorldEventListener implements Listener {
     @EventHandler
     public void onPlayerChangedWorldEvent(PlayerChangedWorldEvent e) {
         if(this.instance.playerTeamMap.containsKey(e.getPlayer().getName())) {
-            this.instance.playerTargetMap.put(e.getPlayer().getName(), e.getPlayer().getLocation());
+            Bukkit.getScheduler().runTaskLater(this.instance, () -> {
+                this.instance.playerTargetMap.put(e.getPlayer().getName(), e.getPlayer().getLocation());
+            }, 6);
         }
     }
 

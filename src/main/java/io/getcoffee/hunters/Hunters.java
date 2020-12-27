@@ -124,7 +124,7 @@ public class Hunters extends JavaPlugin {
             Optional.ofNullable(Hunters.INSTANCE.getNearest(p)).ifPresent(loc -> {
                 Hunters.INSTANCE.playerTargetMap.put(p.getName(), loc);
             });
-        }, 5, 5));
+        }, 4, 4));
     }
 
     public void addUpdateCompassTask(Player p) {
