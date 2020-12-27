@@ -29,10 +29,10 @@ public class CommandHuntStart implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         instance.getLogger().info("Starting hunt!");
-        instance.reloadConfig();
+        instance.loadConfig();
 
         instance.start();
-        return false;
+        return true;
     }
 
 }

@@ -34,6 +34,7 @@ public class Hunters extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new AsyncPlayerChatEventListener(INSTANCE), this);
         getServer().getPluginManager().registerEvents(new PlayerRespawnListener(), this);
         getServer().getPluginManager().registerEvents(new PlayerJoinListener(INSTANCE), this);
+        getServer().getPluginManager().registerEvents(new PlayerChangedWorldEventListener(), this);
         getServer().setDefaultGameMode(GameMode.SPECTATOR);
         if (this.isRunning()) {
             this.start();
@@ -126,7 +127,7 @@ public class Hunters extends JavaPlugin {
         this.compassTasks.put(p.getName(), Bukkit.getScheduler().runTaskTimer(Hunters.INSTANCE, () -> {
             Optional.ofNullable(Hunters.INSTANCE.getNearest(p)).ifPresent(loc -> {
                 Arrays.stream(p.getInventory().getContents())
-                        .filter(item -> item != null && item.getItemMeta() instanceof CompassMeta)
+                        .filter(item -> item != null && item.getType() == Material.COMPASS)
                         .forEach(item -> {
                             var compassMeta = (CompassMeta) item.getItemMeta();
                             compassMeta.setLodestoneTracked(false);
@@ -142,7 +143,7 @@ public class Hunters extends JavaPlugin {
         this.compassTasks.remove(p.getName());
     }
 
-        public Location getNearest(Player player) {
+    public Location getNearest(Player player) {
         int ourTeam = Hunters.INSTANCE.playerTeamMap.get(player.getName());
         int theirTeam = (ourTeam + 1) % 2;
         double distance = Double.POSITIVE_INFINITY; // To make sure the first
