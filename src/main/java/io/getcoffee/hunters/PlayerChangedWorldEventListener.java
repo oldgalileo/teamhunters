@@ -8,6 +8,7 @@ import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.inventory.meta.CompassMeta;
 
 import java.util.Arrays;
+import java.util.Optional;
 
 public class PlayerChangedWorldEventListener implements Listener {
 

@@ -17,6 +17,7 @@ public class Hunters extends JavaPlugin {
 
     public static Hunters INSTANCE;
     private boolean running = false;
+    private boolean started = false;
 
     public HashMap<String, Location> playerTargetMap = new HashMap<>();
     public HashMap<String, Integer> playerTeamMap = new HashMap<>();
@@ -56,7 +57,9 @@ public class Hunters extends JavaPlugin {
                 getLogger().info("config.yml found, loading!");
                 reloadConfig();
             }
-            this.running = getConfig().getBoolean("started");
+            this.running = getConfig().getBoolean("running");
+            this.started = getConfig().getBoolean("started");
+
             getLogger().info("STARTED: "+ this.running);
             // First Team Setup
             teamName[0] = getConfig().getString("teams.first.name");
@@ -76,17 +79,22 @@ public class Hunters extends JavaPlugin {
     public void start() {
         getServer().broadcastMessage("Starting the hunt...");
         running = true;
-        getConfig().set("started", running);
-        saveConfig();
+        getConfig().set("running", running);
 
         for (Player p : getServer().getOnlinePlayers()) {
             startPlayer(p);
         }
+
+        started = true;
+        getConfig().set("started", started);
+        saveConfig();
+
+
     }
 
     public void pause() {
         running = false;
-        getConfig().set("started", running);
+        getConfig().set("running", running);
         saveConfig();
 
         getConfig().createSection("paused");
@@ -102,7 +110,7 @@ public class Hunters extends JavaPlugin {
         if(!playerTeamMap.containsKey(p.getName()))
             return;
         var team = playerTeamMap.get(p.getName());
-        if(!pauseLocation.containsKey(p.getName())) {
+        if(!pauseLocation.containsKey(p.getName()) && !this.started) {
             p.teleport(getServer().getWorld("world").getHighestBlockAt(getServer().getWorld("world").getSpawnLocation().add(5 * team, 0, 0)).getLocation());
         } else {
             p.teleport(pauseLocation.get(p.getName()));
