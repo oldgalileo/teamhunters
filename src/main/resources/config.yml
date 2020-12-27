@@ -1,0 +1,18 @@
+running: false
+teams:
+  first:
+    name: 'Red Team'
+    captain: 'ACELL3'
+    targets:
+      - 'ACELL3'
+    players:
+      - 'ACELL3'
+  second:
+    name: 'Blue Team'
+    captain: 'powerpawn'
+    targets:
+      - 'powerpawn'
+      - 'Elon_musk'
+    players:
+      - 'powerpawn'
+      - 'Elon_musk'
