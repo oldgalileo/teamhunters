@@ -17,7 +17,6 @@ public class CommandHuntPause implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         instance.pause();
-        instance.getServer().broadcastMessage("The hunt has been paused...");
         return false;
     }
 }

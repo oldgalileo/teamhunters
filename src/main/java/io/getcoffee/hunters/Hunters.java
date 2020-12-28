@@ -23,10 +23,12 @@ public class Hunters extends JavaPlugin {
     public HashMap<String, Integer> playerTeamMap = new HashMap<>();
     public String[] teamName = new String[2];
     public List<String>[] teamTargetMap = new ArrayList[2];
-    private HashMap<String, BukkitTask> trackPlayerTasks = new HashMap<>();
-    private HashMap<String, BukkitTask> updateCompassTasks = new HashMap<>();
+
+    private BukkitTask findNearestTargetTask;
+    private BukkitTask updateCompassTask;
 
     public HashMap<String, Location> pauseLocation = new HashMap<>();
+    public HashMap<Pair<String, String>, Location> playerWordPortalMap = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -35,9 +37,10 @@ public class Hunters extends JavaPlugin {
         getCommand("hunt_start").setExecutor(new CommandHuntStart(INSTANCE));
         getCommand("hunt_pause").setExecutor(new CommandHuntPause(INSTANCE));
         getServer().getPluginManager().registerEvents(new AsyncPlayerChatEventListener(INSTANCE), this);
-        getServer().getPluginManager().registerEvents(new PlayerRespawnListener(), this);
-        getServer().getPluginManager().registerEvents(new PlayerJoinListener(INSTANCE), this);
+        getServer().getPluginManager().registerEvents(new PlayerRespawnEventListener(), this);
+        getServer().getPluginManager().registerEvents(new PlayerJoinEventListener(INSTANCE), this);
         getServer().getPluginManager().registerEvents(new PlayerChangedWorldEventListener(INSTANCE), this);
+        getServer().getPluginManager().registerEvents(new PlayerPortalEventListener(INSTANCE), this);
         getServer().setDefaultGameMode(GameMode.SPECTATOR);
         if (this.isRunning()) {
             this.start();
@@ -61,6 +64,8 @@ public class Hunters extends JavaPlugin {
             this.started = getConfig().getBoolean("started");
 
             getLogger().info("STARTED: "+ this.running);
+            getLogger().info("RUNNING: "+ this.running);
+
             // First Team Setup
             teamName[0] = getConfig().getString("teams.first.name");
             getConfig().getStringList("teams.first.players").forEach(p -> playerTeamMap.put(p, 0));
@@ -81,6 +86,9 @@ public class Hunters extends JavaPlugin {
         running = true;
         getConfig().set("running", running);
 
+        updateCompassTask = Bukkit.getScheduler().runTaskTimer(this, new UpdateCompassTask(), 10, 10);
+        findNearestTargetTask = Bukkit.getScheduler().runTaskTimer(this, new FindNearestTargetTask(), 10, 10);
+
         for (Player p : getServer().getOnlinePlayers()) {
             startPlayer(p);
         }
@@ -88,14 +96,15 @@ public class Hunters extends JavaPlugin {
         started = true;
         getConfig().set("started", started);
         saveConfig();
-
-
     }
 
     public void pause() {
         running = false;
         getConfig().set("running", running);
         saveConfig();
+
+        updateCompassTask.cancel();
+        findNearestTargetTask.cancel();
 
         getConfig().createSection("paused");
         for (Player p : getServer().getOnlinePlayers()) {
@@ -112,7 +121,7 @@ public class Hunters extends JavaPlugin {
         var team = playerTeamMap.get(p.getName());
         if(!pauseLocation.containsKey(p.getName()) && !this.started) {
             p.teleport(getServer().getWorld("world").getHighestBlockAt(getServer().getWorld("world").getSpawnLocation().add(5 * team, 0, 0)).getLocation());
-        } else {
+        } else if(pauseLocation.containsKey(p.getName())) {
             p.teleport(pauseLocation.get(p.getName()));
             pauseLocation.remove(p.getName());
             getConfig().set("paused." + p.getName(), null);
@@ -120,34 +129,8 @@ public class Hunters extends JavaPlugin {
         }
         p.setGameMode(GameMode.SURVIVAL);
         p.setPlayerListName("[" + teamName[team] + "] " + p.getName());
-        addTrackPlayerTask(p);
-        addUpdateCompassTask(p);
         if(!p.getInventory().contains(Material.COMPASS))
             p.getInventory().addItem(new ItemStack(Material.COMPASS));
-    }
-
-    // TODO: Refactor this to organize it better
-    public void addTrackPlayerTask(Player p) {
-        this.trackPlayerTasks.put(p.getName(), Bukkit.getScheduler().runTaskTimer(Hunters.INSTANCE, () -> {
-            Optional.ofNullable(Hunters.INSTANCE.getNearest(p)).ifPresent(loc -> {
-                Hunters.INSTANCE.playerTargetMap.put(p.getName(), loc);
-            });
-        }, 4 , 4));
-    }
-
-    public void addUpdateCompassTask(Player p) {
-        this.updateCompassTasks.put(p.getName(), Bukkit.getScheduler().runTaskTimer(Hunters.INSTANCE, () -> {
-            Optional.ofNullable(Hunters.INSTANCE.playerTargetMap.get(p.getName())).ifPresent(loc -> {
-                Arrays.stream(p.getInventory().getContents())
-                        .filter(item -> item != null && item.getType() == Material.COMPASS)
-                        .forEach(item -> {
-                            var compassMeta = (CompassMeta) item.getItemMeta();
-                            compassMeta.setLodestoneTracked(false);
-                            compassMeta.setLodestone(loc);
-                            item.setItemMeta(compassMeta);
-                        });
-            });
-        }, 10, 10));
     }
 
     public void pausePlayer(Player p) {
@@ -155,41 +138,97 @@ public class Hunters extends JavaPlugin {
             pauseLocation.put(p.getName(), p.getLocation());
         p.setGameMode(GameMode.SPECTATOR);
         p.setPlayerListName(p.getName());
-        cancelTrackPlayerTask(p);
-        cancelUpdateCompassTask(p);
     }
 
-    public void cancelUpdateCompassTask(Player p) {
-        Optional.ofNullable(this.updateCompassTasks.get(p.getName())).ifPresent(BukkitTask::cancel);
-        this.updateCompassTasks.remove(p.getName());
+
+    public Location getNearest(Player p) {
+        var nearTargetLoc = getNearestTarget(p);
+        if(nearTargetLoc != null)
+            return nearTargetLoc;
+        return getNearestTargetPortal(p);
     }
 
-    public void cancelTrackPlayerTask(Player p) {
-        Optional.ofNullable(this.trackPlayerTasks.get(p.getName())).ifPresent(BukkitTask::cancel);
-        this.trackPlayerTasks.remove(p.getName());
-    }
-
-    public Location getNearest(Player player) {
-        int ourTeam = Hunters.INSTANCE.playerTeamMap.get(player.getName());
+    public Location getNearestTarget(Player p) {
+        int ourTeam = playerTeamMap.get(p.getName());
         int theirTeam = (ourTeam + 1) % 2;
         double distance = Double.POSITIVE_INFINITY; // To make sure the first
 
-        // player checked is closest
-        Location target = null;
-        for (Player p : Hunters.INSTANCE.getServer().getOnlinePlayers()) {
-            if(ourTeam == Hunters.INSTANCE.playerTeamMap.get(p.getName())) continue;
-            if(!Hunters.INSTANCE.teamTargetMap[theirTeam].contains(p.getName())) continue;
-            if(p.getWorld() != player.getWorld()) continue;
-            double distanceto = player.getLocation().distance(p.getLocation());
+        Location targetLoc = null;
+        for(Player target : getServer().getOnlinePlayers()) {
+            if(ourTeam == playerTeamMap.get(target.getName())) continue;
+            if(!teamTargetMap[theirTeam].contains(target.getName())) continue;
+            if(target.getWorld() != p.getWorld()) continue;
+            double distanceto = p.getLocation().distance(target.getLocation());
             if (distanceto > distance)
                 continue;
             distance = distanceto;
-            target = p.getLocation();
+            targetLoc = target.getLocation();
         }
-        return target;
+        return targetLoc;
+    }
+
+    public Location getNearestTargetPortal(Player p) {
+        int ourTeam = playerTeamMap.get(p.getName());
+        int theirTeam = (ourTeam + 1) % 2;
+        double distance = Double.POSITIVE_INFINITY; // To make sure the first
+
+        Location targetLoc = null;
+        for(Player target : getServer().getOnlinePlayers()) {
+            if(ourTeam == playerTeamMap.get(target.getName())) continue;
+            if(!teamTargetMap[theirTeam].contains(target.getName())) continue;
+            if(target.getWorld() == p.getWorld()) continue;
+            var loc = playerWordPortalMap.get(new Pair<>(target.getName(), p.getWorld().getName()));
+            if(loc != null) {
+                double distanceto = p.getLocation().distance(loc);
+                if (distanceto > distance)
+                    continue;
+                distance = distanceto;
+                targetLoc = loc;
+            }
+        }
+        if(targetLoc == null) return playerWordPortalMap.get(new Pair<>(p.getName(), p.getWorld().getName()));
+        return targetLoc;
+    }
+
+    public static class UpdateCompassTask implements Runnable {
+        @Override
+        public void run() {
+            Hunters.INSTANCE.getServer().getOnlinePlayers().forEach(p ->
+                    Optional.ofNullable(Hunters.INSTANCE.playerTargetMap.get(p.getName())).ifPresent(loc -> {
+                        Arrays.stream(p.getInventory().getContents())
+                                .filter(item -> item != null && item.getType() == Material.COMPASS)
+                                .forEach(item -> {
+                                    var compassMeta = (CompassMeta) item.getItemMeta();
+                                    compassMeta.setDisplayName("Tracking: " + Hunters.INSTANCE.teamName[(Hunters.INSTANCE.playerTeamMap.get(p.getName()) + 1) % 2]);
+                                    compassMeta.setLodestoneTracked(false);
+                                    compassMeta.setLodestone(loc);
+                                    compassMeta.setCustomModelData(Hunters.INSTANCE.getServer().getCurrentTick());
+                                    item.setItemMeta(compassMeta);
+                                });
+                    })
+            );
+        }
+    }
+
+    public static class FindNearestTargetTask implements Runnable {
+
+        @Override
+        public void run() {
+            Hunters.INSTANCE.getServer().getOnlinePlayers().forEach(p -> {
+                Optional.ofNullable(Hunters.INSTANCE.getNearest(p)).ifPresent(loc -> {
+                    Hunters.INSTANCE.playerTargetMap.put(p.getName(), loc);
+                });
+            });
+        }
     }
 
     public boolean isRunning() {
         return this.running;
+    }
+
+    public static class Pair<X, Y> extends AbstractMap.SimpleEntry {
+        public Pair(X key, Y value) {
+            super(key, value);
+        }
     }
 }

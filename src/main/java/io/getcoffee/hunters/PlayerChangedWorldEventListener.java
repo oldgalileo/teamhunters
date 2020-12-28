@@ -1,14 +1,10 @@
 package io.getcoffee.hunters;
 
+import io.getcoffee.hunters.Hunters.Pair;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
-import org.bukkit.inventory.meta.CompassMeta;
-
-import java.util.Arrays;
-import java.util.Optional;
 
 public class PlayerChangedWorldEventListener implements Listener {
 
@@ -20,9 +16,7 @@ public class PlayerChangedWorldEventListener implements Listener {
 
     @EventHandler
     public void onPlayerChangedWorldEvent(PlayerChangedWorldEvent e) {
-        Bukkit.getScheduler().runTaskLater(this.instance, () -> {
-            this.instance.playerTargetMap.put(e.getPlayer().getName(), e.getPlayer().getLocation());
-        }, 11);
+        this.instance.playerWordPortalMap.put(new Pair<>(e.getPlayer().getName(), e.getPlayer().getWorld().getName()), e.getPlayer().getLocation());
     }
 
 }

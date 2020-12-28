@@ -7,7 +7,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 
-public class PlayerRespawnListener implements Listener {
+public class PlayerRespawnEventListener implements Listener {
 
     @EventHandler
     public void onPlayerRespawn(PlayerRespawnEvent e) {

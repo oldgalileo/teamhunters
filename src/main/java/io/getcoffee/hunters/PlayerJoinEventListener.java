@@ -5,11 +5,11 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 
-public class PlayerJoinListener implements Listener {
+public class PlayerJoinEventListener implements Listener {
 
     private final Hunters instance;
 
-    public PlayerJoinListener(Hunters instance) {
+    public PlayerJoinEventListener(Hunters instance) {
         this.instance = instance;
     }
 
